@@ -90,4 +90,17 @@ final class MembershipReconciliationService
             'evidence' => 'journal_line_pairing_bank_or_cash',
         ];
     }
+
+    /**
+     * SQL podoba pravidel settlement(): filtr musí proběhnout před stránkováním, PHP metodu z SQL volat nelze.
+     * Agregace párování je společná; shodu stavů SQL přehledu s detailem ověřuje integrační test.
+     */
+    public static function settlementStatusSql(): string
+    {
+        return "CASE WHEN c.reversal_claim_id IS NOT NULL THEN 'reversed'
+          WHEN c.posted_at IS NULL OR c.reversed_by IS NOT NULL THEN 'ambiguous'
+          WHEN p.claim_id IS NULL THEN 'unreconciled'
+          WHEN p.invalid_count<>0 OR p.membership_claim_count<>1 OR p.net_cents<0 OR p.net_cents>c.amount_cents THEN 'ambiguous'
+          WHEN p.net_cents=0 THEN 'settled' ELSE 'partially_settled' END";
+    }
 }

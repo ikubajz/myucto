@@ -50,8 +50,11 @@ final class MembershipAction
             $query = $request->getQueryParams();
             $after = $this->queryInteger($query['after_id'] ?? 0, 'after_id', 0);
             $limit = $this->queryInteger($query['limit'] ?? 100, 'limit', 1, 100);
-            $items = $this->members->page($supplier, $after, $limit);
-            return ['items' => $items, 'next_after_id' => count($items) === $limit ? $items[array_key_last($items)]['id'] : null];
+            $filter = \MyInvoice\Service\Nonprofit\Membership\MembershipListFilter::parse($query);
+            $items = (new \MyInvoice\Repository\Nonprofit\Membership\MembershipListRepository($this->db))->page($supplier, $after, $limit + 1, $filter);
+            $more = count($items) > $limit;
+            if ($more) array_pop($items);
+            return ['items' => $items, 'next_after_id' => $more ? $items[array_key_last($items)]['id'] : null];
         });
     }
 

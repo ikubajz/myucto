@@ -54,6 +54,11 @@ it('posts exactly the documented bodies and never supplies an actor', async () =
   }
 })
 
+it('sends list filters with an explicit blank year for a title spanning all periods', async () => {
+  await api.members(5,0,50,{search:'Synthetic',title_key:'SYNTHETIC',year:null,payment_status:'unproven'})
+  expect(calls.get.mock.calls[0]?.[1].params).toEqual({after_id:0,limit:50,search:'Synthetic',title_key:'SYNTHETIC',year:'',payment_status:'unproven'})
+})
+
 it('refuses requests captured before a supplier switch', () => {
   scope.requested = '6'
   expect(() => api.members(5)).toThrow('nonprofit_membership_supplier_changed')

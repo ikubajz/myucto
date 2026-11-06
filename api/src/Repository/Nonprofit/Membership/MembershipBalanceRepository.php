@@ -93,8 +93,22 @@ final class MembershipBalanceRepository
             array_push($params, $claim, $pair, $claimsById[$claim]['account_id']);
         }
         $q = $this->db->pdo()->prepare(
-            'WITH requested AS (' . implode(' UNION ALL ', $requested) . ")
-             SELECT r.claim_id,r.pairing_id,COUNT(*) item_count,
+            'WITH requested AS (' . implode(' UNION ALL ', $requested) . ') ' . self::nativePairingTotalsSql()
+        );
+        $q->execute([...$params, $supplier]);
+        $out = [];
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $out[(int) $row['claim_id']] = ['pairing_id' => (int) $row['pairing_id'], 'item_count' => (int) $row['item_count'],
+                'invalid_count' => (int) $row['invalid_count'], 'membership_claim_count' => (int) $row['membership_claim_count'],
+                'net_cents' => (int) $row['net_cents']];
+        }
+        return $out;
+    }
+
+    /** Stejná agregace průkazného nativního párování pro detail a seznam; CTE requested má claim_id/pairing_id/account_id. */
+    public static function nativePairingTotalsSql(): string
+    {
+        return "             SELECT r.claim_id,r.pairing_id,COUNT(*) item_count,
                     SUM(l.id IS NULL OR e.posted_at IS NULL OR e.reversed_by IS NOT NULL OR l.is_red_storno<>0
                         OR l.currency_code IS NOT NULL OR l.amount_foreign IS NOT NULL OR l.fx_rate IS NOT NULL
                         OR l.account_id<>r.account_id
@@ -114,16 +128,7 @@ final class MembershipBalanceRepository
                     AND " . BankStatementOwnershipResolver::sqlForColumn('i.supplier_id') . "
           LEFT JOIN cash_documents cd ON e.source_type='cash' AND cd.id=e.source_id AND cd.supplier_id=i.supplier_id
               GROUP BY r.claim_id,r.pairing_id
-              ORDER BY r.claim_id"
-        );
-        $q->execute([...$params, $supplier]);
-        $out = [];
-        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $out[(int) $row['claim_id']] = ['pairing_id' => (int) $row['pairing_id'], 'item_count' => (int) $row['item_count'],
-                'invalid_count' => (int) $row['invalid_count'], 'membership_claim_count' => (int) $row['membership_claim_count'],
-                'net_cents' => (int) $row['net_cents']];
-        }
-        return $out;
+              ORDER BY r.claim_id";
     }
 
     public function reconciliationTotals(int $supplier, int $period): array

@@ -7,11 +7,11 @@ import ClientSearchSelect from '@/components/ui/ClientSearchSelect.vue'
 import ClientFormModal from '@/components/modals/ClientFormModal.vue'
 import { btnOutline, ICONS } from '@/components/ui/buttonStyles'
 import { accountingApi, type AccountingPeriod } from '@/api/accounting'
-import { membershipApi, type MemberRow } from '@/api/nonprofitMembership'
+import { membershipApi, type MemberRow, type MembershipListFilters } from '@/api/nonprofitMembership'
 import type { Client } from '@/api/clients'
-import { formatDate } from '@/composables/useFormat'
+import { formatDate, formatMoneyMinor } from '@/composables/useFormat'
 import { appIsoDate } from '@/utils/date'
-import { errorBox, errorMessage, memberStatusBadge } from './membershipFormat'
+import { badgeBase, errorBox, errorMessage, memberStatusBadge } from './membershipFormat'
 import MembershipMemberDetail from './MembershipMemberDetail.vue'
 import MembershipReconciliation from './MembershipReconciliation.vue'
 import MembershipRates from './MembershipRates.vue'
@@ -26,6 +26,7 @@ const periods = ref<AccountingPeriod[]>([])
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
+const selectionNotice = ref('')
 const selected = ref<{ id: number; label: string } | null>(null)
 const clientId = ref<number | null>(null)
 const clientLabel = ref('')
@@ -34,11 +35,26 @@ const creating = ref(false)
 const root = ref<HTMLElement | null>(null)
 const detailPane = ref<HTMLElement | null>(null)
 const dataVersion = ref(0)
+const search = ref(''), filterYear = ref(appIsoDate().slice(0,4)), titleKey = ref('')
+const paymentStatus = ref<NonNullable<MembershipListFilters['payment_status']>>('all')
+const appliedFilters = ref<MembershipListFilters>({search:'',year:Number(filterYear.value),title_key:'',payment_status:'all'})
+function applyFilters() {
+  if (batchLocked.value) return
+  const year = String(filterYear.value).trim(), title = titleKey.value.trim()
+  if ((!year && !title) || (year && (!/^[0-9]{4}$/.test(year) || Number(year)<1900 || Number(year)>9998))) {error.value=t('nonprofitMembership.listNeedPeriod');return}
+  const next = {search:search.value.trim(),year:year ? Number(year) : null,title_key:title,payment_status:paymentStatus.value}
+  if (JSON.stringify(next) === JSON.stringify(appliedFilters.value) && !error.value) return
+  appliedFilters.value = next
+  if (checkedMembers.value.length) selectionNotice.value=t('nonprofitMembership.listSelectionCleared')
+  checkedMembers.value=[]; nextAfter.value=null
+  void load()
+}
 const checkedMembers = ref<number[]>([]), batchOpen = ref(false), batchLocked = ref(false)
 const detailVersion = ref(0)
 function batchChanged() { dataVersion.value++; detailVersion.value++; void load() }
 function checkMember(id: number, event: Event) {
-  if (!props.canManage || batchLocked.value) return
+  if (!props.canManage || batchLocked.value || loading.value) return
+  selectionNotice.value=''
   const checked = (event.target as HTMLInputElement).checked
   if (checked && !checkedMembers.value.includes(id) && checkedMembers.value.length < 500) checkedMembers.value.push(id)
   else if (!checked) checkedMembers.value = checkedMembers.value.filter(x => x !== id)
@@ -75,9 +91,13 @@ watch(() => selected.value?.id, async id => {
 
 async function load(append = false) {
   const ticket = ++generation, supplier = props.supplier
+  if (!append) {
+    if (checkedMembers.value.length) selectionNotice.value=t('nonprofitMembership.listSelectionRefreshed')
+    checkedMembers.value=[]; members.value=[]; nextAfter.value=null
+  }
   loading.value = true; error.value = ''
   try {
-    const page = await membershipApi.members(supplier, append ? nextAfter.value ?? 0 : 0, 50)
+    const page = await membershipApi.members(supplier, append ? nextAfter.value ?? 0 : 0, 50, appliedFilters.value)
     if (!alive || ticket !== generation || supplier !== props.supplier) return
     members.value = append ? [...members.value, ...page.items] : page.items
     nextAfter.value = page.next_after_id
@@ -136,6 +156,9 @@ async function create() {
 watch(() => props.supplier, () => {
   generation++; createTicket++
   checkedMembers.value = []; batchOpen.value = false; batchLocked.value = false
+  search.value=''; filterYear.value=appIsoDate().slice(0,4); titleKey.value=''; paymentStatus.value='all'
+  selectionNotice.value=''
+  appliedFilters.value={search:'',year:Number(filterYear.value),title_key:'',payment_status:'all'}
   members.value = []; nextAfter.value = null; periods.value = []; selected.value = null
   clientId.value = null; clientLabel.value = ''; memberNumber.value = ''
   creating.value = false; error.value = ''; notice.value = ''
@@ -156,6 +179,9 @@ const actions = computed<ActionItem[]>(() => [
 const createActions = computed<ActionItem[]>(() => [
   { key: 'create-member', label: t('nonprofitMembership.createMember'), icon: 'plus', tier: 'primary', variant: 'primary', show: props.canManage, disabled: creating.value || !clientId.value || !numberValid.value, disabledReason: t('nonprofitMembership.createNeedsInput'), run: () => { void create() } },
 ])
+const filterActions = computed<ActionItem[]>(() => [
+  {key:'filter-members',label:t('nonprofitMembership.listApply'),icon:'eye',variant:'primary',disabled:loading.value || batchLocked.value,run:applyFilters},
+])
 </script>
 
 <template>
@@ -165,6 +191,7 @@ const createActions = computed<ActionItem[]>(() => [
     <p v-if="!canManage" role="status" class="text-sm text-neutral-500" data-section="readonly">{{ t('nonprofitMembership.readonly') }}</p>
     <p v-if="error" role="alert" :class="errorBox" data-section="workspace-error">{{ error }}</p>
     <p v-if="notice" role="status" class="text-sm text-success-600" data-section="workspace-notice">{{ notice }}</p>
+    <p v-if="selectionNotice" role="status" class="text-sm text-warning-700">{{ selectionNotice }}</p>
     <ActionBar :actions="actions" />
     <p v-if="canManage" class="text-sm text-neutral-500">{{ t('nonprofitMembership.batchSelectedCount', {count: checkedMembers.length}) }}</p>
     <MembershipBatchFlow v-if="batchOpen" :key="supplier" :supplier="supplier" :can-manage="canManage" :periods="periods" :selected-member-ids="checkedMembers"
@@ -207,20 +234,38 @@ const createActions = computed<ActionItem[]>(() => [
     </div>
     <section class="min-w-0 space-y-3" data-section="members">
       <h2 tabindex="-1" class="font-semibold focus:outline-none" data-focus="members-heading">{{ t('nonprofitMembership.members') }}</h2>
+      <form class="space-y-3 rounded border bg-surface p-3" data-section="member-filters" @submit.prevent="applyFilters">
+        <fieldset :disabled="batchLocked" class="grid gap-3 sm:grid-cols-2">
+          <label :class="formLabel">{{ t('nonprofitMembership.listSearch') }}<input v-model="search" :class="field" maxlength="160" data-field="member-search" /></label>
+          <label :class="formLabel">{{ t('nonprofitMembership.listYear') }}<input v-model="filterYear" :class="field" type="number" min="1900" max="9998" step="1" data-field="member-year" /></label>
+          <label :class="formLabel">{{ t('nonprofitMembership.titleKey') }}<input v-model="titleKey" :class="field" maxlength="80" data-field="member-title" /></label>
+          <label :class="formLabel">{{ t('nonprofitMembership.listPaymentStatus') }}<select v-model="paymentStatus" :class="field" data-field="member-payment-status"><option v-for="status in ['all','paid','unpaid','unproven','none'] as const" :key="status" :value="status">{{ t(`nonprofitMembership.listStatus_${status}`) }}</option></select></label>
+        </fieldset>
+        <p class="text-xs text-neutral-500">{{ t('nonprofitMembership.listFilterHelp') }}</p>
+        <ActionBar :actions="filterActions" />
+      </form>
       <p v-if="loading && !members.length" role="status" class="text-sm text-neutral-500" data-section="members-loading">{{ t('common.loading') }}</p>
-      <div v-else-if="!members.length && !loading" class="space-y-2 text-sm text-neutral-500" data-section="members-empty">
-        <p>{{ t('nonprofitMembership.membersEmpty') }}</p>
-        <ol class="list-decimal space-y-1 pl-5" data-section="members-steps">
+      <div v-else-if="!members.length && !loading && !error" class="space-y-2 text-sm text-neutral-500" data-section="members-empty">
+        <p>{{ t(appliedFilters.search || appliedFilters.title_key || appliedFilters.payment_status !== 'all' ? 'nonprofitMembership.listNoResults' : 'nonprofitMembership.membersEmpty') }}</p>
+        <ol v-if="!appliedFilters.search && !appliedFilters.title_key && appliedFilters.payment_status === 'all'" class="list-decimal space-y-1 pl-5" data-section="members-steps">
           <li v-for="(step, index) in tm('nonprofitMembership.firstSteps')" :key="index">{{ rt(step) }}</li>
         </ol>
       </div>
       <div v-for="row in members" :key="row.id" :class="['flex flex-wrap items-center justify-between gap-3 rounded border bg-surface p-3', selected?.id === row.id ? 'border-primary-400 ring-1 ring-primary-300' : '']" data-section="member-row" :data-member="row.id" :aria-current="selected?.id === row.id ? 'true' : undefined">
-        <input v-if="canManage" type="checkbox" :checked="checkedMembers.includes(row.id)" :disabled="batchLocked || (checkedMembers.length >= 500 && !checkedMembers.includes(row.id))" :aria-label="t('nonprofitMembership.batchSelectMember', {name: labelOf(row)})" data-action="batch-check-member" @change="checkMember(row.id, $event)" />
+        <input v-if="canManage" type="checkbox" :checked="checkedMembers.includes(row.id)" :disabled="loading || batchLocked || (checkedMembers.length >= 500 && !checkedMembers.includes(row.id))" :aria-label="t('nonprofitMembership.batchSelectMember', {name: labelOf(row)})" data-action="batch-check-member" @change="checkMember(row.id, $event)" />
         <div class="min-w-0 flex-1 space-y-1 text-sm">
           <p class="break-words font-medium">{{ row.member_number }} · {{ labelOf(row) }}</p>
           <p v-if="row.revision_no === null || row.effective_from === null || row.status === null" class="text-warning-700" data-field="member-revision">{{ t('nonprofitMembership.noRevision') }}</p>
           <p v-else-if="row.effective_from > today" class="text-warning-700" data-field="member-revision">{{ t('nonprofitMembership.futureRevision', { status: t(`nonprofitMembership.status_${row.status}`), date: formatDate(row.effective_from) }) }}</p>
           <p v-else class="flex flex-wrap items-center gap-2" data-field="member-revision"><span :class="memberStatusBadge(row.status)" data-field="member-status">{{ t(`nonprofitMembership.status_${row.status}`) }}</span><span>{{ t('nonprofitMembership.sinceDate', { date: formatDate(row.effective_from) }) }}</span></p>
+          <template v-if="row.contribution">
+            <span :class="[badgeBase,row.contribution.status === 'paid' ? 'bg-success-50 text-success-700' : row.contribution.status === 'unpaid' ? 'bg-danger-50 text-danger-600' : row.contribution.status === 'unproven' ? 'bg-warning-50 text-warning-700' : 'bg-neutral-100 text-neutral-600']" data-field="contribution-status">{{ t(`nonprofitMembership.listStatus_${row.contribution.status}`) }}</span>
+            <p v-if="row.contribution.claim_count" class="flex flex-wrap gap-x-3 gap-y-1 text-neutral-500" data-field="contribution-amounts">
+              <span class="whitespace-nowrap">{{ t('nonprofitMembership.listPrescribed') }}: {{ formatMoneyMinor(Number(row.contribution.prescribed_cents)) }}</span>
+              <span class="whitespace-nowrap">{{ t('nonprofitMembership.listPaid') }}: {{ formatMoneyMinor(row.contribution.paid_cents === null ? null : Number(row.contribution.paid_cents)) }}</span>
+              <span class="whitespace-nowrap">{{ t('nonprofitMembership.sumProvenOpen') }}: {{ formatMoneyMinor(row.contribution.open_cents === null ? null : Number(row.contribution.open_cents)) }}</span>
+            </p>
+          </template>
         </div>
         <button type="button" :class="btnOutline('primary')" data-action="open-member" @click="openMember(row)">
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" :d="ICONS.eye" /></svg>{{ t('nonprofitMembership.openMember') }}

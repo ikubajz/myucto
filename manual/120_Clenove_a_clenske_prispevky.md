@@ -60,6 +60,18 @@ Pro změnu společných údajů nebo nové zpracování členů po opravě odmí
 
 ## 120.3 Úhrady a kontrola zůstatku
 
+### Přehled příspěvků v seznamu členů
+
+Seznam můžete prohledat podle části jména kontaktu nebo členského čísla. Zvolte rok příspěvku, případně přesné označení titulu, a použijte **Použít filtry**. Rok vybírá příspěvky, jejichž období do zvoleného roku zasahuje. Pro zobrazení všech období jednoho titulu vyplňte označení a rok nechte prázdný. Volba roku nemění účetní datum ani stav členství.
+
+U člena uvidíte částku předepsaných aktivních příspěvků za vybraný titul nebo rok a stav **Uhrazeno**, **Neuhrazeno (doložený zůstatek)**, **Úhrada neprokázána** nebo **Bez předpisu pro zvolený titul nebo rok**. Stornované předpisy se do těchto součtů nezahrnují. Prokázaná úhrada a zůstatek vycházejí ze stejného nativního párování jako detail člena.
+
+Pokud některou úhradu nelze prokázat nebo je párování nejednoznačné, úhrada a zůstatek se zobrazí jako neurčené, nikoli jako potvrzený dluh. Filtr neuhrazených proto zahrnuje jen doložený kladný zůstatek; neprokázané platby mají vlastní filtr. Částečná prokázaná úhrada patří mezi neuhrazené. Filtry se uplatní před stránkováním celého seznamu.
+
+Změna filtrů nebo obnova dat seznamu zruší zaškrtnuté členy pro novou dávku a oznámí to, aby ve výběru nezůstal skrytý člen. Pouhé použití nezměněných filtrů výběr zachová. Již uložená dávka se tím nemění. Detail otevřeného člena stále ukazuje celou jeho historii a předpisy, nezávisle na filtrech seznamu.
+
+### Párování a kontrola období
+
 Pohledávky se zobrazují po stránkách. Přehled rozlišuje předepsanou částku a prokázaný otevřený zůstatek. Úhrada je doložená teprve přes skutečné párování s nativním bankovním nebo pokladním dokladem.
 
 Párování se nedělá na této stránce. Otevřete opis účtu pohledávky v hlavní knize, přepněte na **Otevřené položky - párování** a spojte řádek předpisu s řádkem platby do okruhu ([kap. 55.8.5.1](55_Hlavni_kniha.md)). Úhrada se prokáže jen u okruhu, ve kterém je jediná pohledávka z této evidence.
