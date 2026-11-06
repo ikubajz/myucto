@@ -90,10 +90,11 @@ final class MembershipBatchRepository
             JOIN JSON_TABLE(?, '$[*]' COLUMNS(
               member_id BIGINT PATH '$.member_id', status VARCHAR(16) PATH '$.status', amount_cents BIGINT PATH '$.amount_cents',
               preview_hash VARCHAR(64) PATH '$.preview_hash', expected_case_version INT PATH '$.expected_case_version',
-              operation_id BIGINT PATH '$.operation_id', error_code VARCHAR(100) PATH '$.error_code', error_message VARCHAR(2000) PATH '$.error_message'
+              operation_id BIGINT PATH '$.operation_id', deferred_cents BIGINT PATH '$.deferred_cents', deferral_date DATE PATH '$.deferral_date',
+              error_code VARCHAR(100) PATH '$.error_code', error_message VARCHAR(2000) PATH '$.error_message'
             )) p ON p.member_id=i.member_id
             SET i.status=p.status,i.amount_cents=p.amount_cents,i.preview_hash=p.preview_hash,i.expected_case_version=p.expected_case_version,
-                i.operation_id=p.operation_id,i.error_code=p.error_code,i.error_message=p.error_message
+                i.operation_id=p.operation_id,i.deferred_cents=p.deferred_cents,i.deferral_date=p.deferral_date,i.error_code=p.error_code,i.error_message=p.error_message
             WHERE i.supplier_id=? AND i.batch_id=? AND i.status='pending' AND b.phase='preparing'");
         $q->execute([NonprofitTaxRules::canonicalJson($rows), $supplier, $batch]);
     }
@@ -132,7 +133,9 @@ final class MembershipBatchRepository
             COALESCE(SUM(status='pending'),0) pending,COALESCE(SUM(status='ready'),0) ready,COALESCE(SUM(status='created'),0) created,
             COALESCE(SUM(status='existing'),0) existing,COALESCE(SUM(status='rejected'),0) rejected,
             CAST(COALESCE(SUM(CASE WHEN status IN ('ready','created') THEN amount_cents ELSE 0 END),0) AS CHAR) planned_cents,
-            CAST(COALESCE(SUM(CASE WHEN status='created' THEN amount_cents ELSE 0 END),0) AS CHAR) created_cents
+            CAST(COALESCE(SUM(CASE WHEN status='created' THEN amount_cents ELSE 0 END),0) AS CHAR) created_cents,
+            CAST(COALESCE(SUM(CASE WHEN status IN ('ready','created') THEN deferred_cents ELSE 0 END),0) AS CHAR) deferred_cents,
+            MIN(CASE WHEN status IN ('ready','created') AND deferred_cents>0 THEN deferral_date END) deferral_date
             FROM nonprofit_membership_batch_members WHERE supplier_id=? AND batch_id=?");
         $q->execute([$supplier, $batch]);
         $row = $q->fetch(PDO::FETCH_ASSOC);

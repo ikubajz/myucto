@@ -14,6 +14,10 @@ const props = defineProps<{ supplier: number; canManage: boolean; periods: Accou
 const emit = defineEmits<{ changed: []; close: []; lock: [locked: boolean] }>()
 const { t, te } = useI18n()
 const mode = ref<'active' | 'selected'>('selected')
+const draftMemberIds = ref<number[] | null>(null)
+const effectiveMemberIds = computed(() => draftMemberIds.value ?? props.selectedMemberIds)
+const draftTemplate = ref<MembershipBatchCreate['template']>()
+const draftKey = ref(0)
 const detail = ref<MembershipBatchDetail | null>(null), busy = ref(false), stopRequested = ref(false)
 const error = ref(''), notice = ref(''), acknowledged = ref(false)
 const recent = ref<MembershipBatchRecent[]>([]), recentBefore = ref<number | null>(null), recentError = ref(''), recentLoading = ref(false)
@@ -67,11 +71,11 @@ async function open(id: number, after = 0, direction: 'new' | 'next' | 'previous
 }
 
 async function prepareRequest(request: MembershipIssueRequest) {
-  if (busy.value || !props.canManage || (mode.value === 'selected' && (!props.selectedMemberIds.length || props.selectedMemberIds.length > 500))) {
+  if (busy.value || !props.canManage || (mode.value === 'selected' && (!effectiveMemberIds.value.length || effectiveMemberIds.value.length > 500))) {
     error.value = t('nonprofitMembership.batchSelectionRequired'); return
   }
   const {member_id: _member, ...template} = request
-  const input = {template, selection_mode: mode.value, member_ids: mode.value === 'selected' ? [...props.selectedMemberIds].sort((a,b) => a-b) : []}
+  const input = {template, selection_mode: mode.value, member_ids: mode.value === 'selected' ? [...effectiveMemberIds.value].sort((a,b) => a-b) : []}
   const fingerprint = JSON.stringify(input)
   if (!lastCreate || lastCreate.fingerprint !== fingerprint) lastCreate = {fingerprint, body: {...input, idempotency_key: crypto.randomUUID()}}
   const ticket = ++epoch, supplier = props.supplier
@@ -80,6 +84,7 @@ async function prepareRequest(request: MembershipIssueRequest) {
   try {
     const result = await membershipApi.createBatch(supplier, lastCreate.body)
     if (!alive || ticket !== epoch || supplier !== props.supplier) return
+    if (mode.value === 'selected') draftMemberIds.value = [...input.member_ids]
     detail.value = result; pageAfter.value = 0; previousPages.value = []; acknowledged.value = false; created = true
     void loadRecent()
   } catch (e) { if (alive && ticket === epoch) error.value = errorMessage(e) || t('nonprofitMembership.error') }
@@ -119,11 +124,39 @@ async function work(kind: 'prepare' | 'confirm') {
   }
 }
 
+async function newFromDetail() {
+  if (busy.value || !detail.value || !props.canManage) return
+  const source = detail.value, supplier = props.supplier, ticket = ++epoch
+  busy.value = true; error.value = ''
+  try {
+    const ids: number[] = []
+    if (source.batch.selection_mode === 'selected') {
+      // Zaškrtnutá dávka má nejvýše 500 členů; načítání zůstává omezené i po reloadu.
+      let after = 0
+      for (let page = 0; page < 11; page++) {
+        const result = await membershipApi.batch(supplier, source.batch.id, after)
+        if (!alive || ticket !== epoch || supplier !== props.supplier) return
+        ids.push(...result.items.map(row => row.member_id))
+        if (result.next_after_member_id === null) break
+        if (result.next_after_member_id <= after || ids.length > 500) throw new Error(t('nonprofitMembership.batchSelectionRequired'))
+        after = result.next_after_member_id
+      }
+      if (ids.length !== source.batch.member_count || ids.length > 500) throw new Error(t('nonprofitMembership.batchSelectionRequired'))
+    }
+    if (!alive || ticket !== epoch || supplier !== props.supplier) return
+    draftTemplate.value = {...source.batch.template, classification: {...source.batch.template.classification}}
+    draftMemberIds.value = source.batch.selection_mode === 'selected' ? ids : null
+    mode.value = source.batch.selection_mode; draftKey.value++
+    detail.value = null; acknowledged.value = false; notice.value = ''; lastCreate = null
+  } catch (e) { if (alive && ticket === epoch) error.value = errorMessage(e) || t('nonprofitMembership.error') }
+  finally { if (alive && ticket === epoch) busy.value = false }
+}
+
 const actions = computed<ActionItem[]>(() => [
   {key: 'batch-prepare', label: t('nonprofitMembership.batchContinuePreview'), icon: 'eye', tier: 'primary', variant: 'primary', show: detail.value?.batch.phase === 'preparing', disabled: busy.value || !props.canManage, run: () => {void work('prepare')}},
   {key: 'batch-confirm', label: t(detail.value?.batch.phase === 'posting' ? 'nonprofitMembership.batchContinuePosting' : 'nonprofitMembership.batchConfirm'), icon: 'check', tier: 'primary', variant: 'success', show: !!detail.value && ['ready', 'posting'].includes(detail.value.batch.phase), disabled: busy.value || !props.canManage || !acknowledged.value || !classificationVisible.value, run: () => {void work('confirm')}},
   {key: 'batch-pause', label: t('nonprofitMembership.batchPause'), icon: 'x', variant: 'warning', show: busy.value && !!detail.value, disabled: stopRequested.value, run: () => {stopRequested.value = true}},
-  {key: 'batch-new', label: t('nonprofitMembership.batchNew'), icon: 'plus', show: !!detail.value, disabled: busy.value, run: () => {detail.value = null; acknowledged.value = false; error.value = ''; notice.value = ''; lastCreate = null; epoch++}},
+  {key: 'batch-new', label: t('nonprofitMembership.batchNew'), icon: 'plus', show: !!detail.value && props.canManage, disabled: busy.value, run: () => {void newFromDetail()}},
   {key: 'batch-close', label: t('nonprofitMembership.close'), icon: 'x', disabled: busy.value, run: () => emit('close')},
 ])
 const pageActions = computed<ActionItem[]>(() => [
@@ -137,6 +170,8 @@ const recentActions = computed<ActionItem[]>(() => [
 watch(() => props.supplier, () => {
   epoch++; recentTicket++; dimensionsTicket++; busy.value = false; detail.value = null; recent.value = []; recentBefore.value = null
   error.value = ''; notice.value = ''; acknowledged.value = false; lastCreate = null; overview.value = null; previousPages.value = []
+  draftMemberIds.value = null
+  draftTemplate.value = undefined; draftKey.value++
   void loadRecent(); void loadDimensions()
 })
 watch(busy, value => emit('lock', value), {flush: 'sync'})
@@ -151,22 +186,24 @@ onBeforeUnmount(() => {alive = false; epoch++; recentTicket++; dimensionsTicket+
     <p v-if="error" role="alert" :class="errorBox" data-section="batch-error">{{ error }}</p>
     <p v-if="notice" role="status" class="text-sm text-warning-700">{{ notice }}</p>
     <p v-if="busy" role="status" class="text-sm text-neutral-500">{{ t('nonprofitMembership.batchWorking') }}</p>
-    <template v-if="!detail">
-      <fieldset :disabled="busy" class="flex flex-wrap gap-4 text-sm">
-        <label class="flex items-center gap-2"><input v-model="mode" type="radio" value="selected" data-field="batch-selected" />{{ t('nonprofitMembership.batchSelected', {count: selectedMemberIds.length}) }}</label>
+    <div v-if="!detail">
+      <fieldset :disabled="busy || !!detail" class="flex flex-wrap gap-4 text-sm">
+        <label class="flex items-center gap-2"><input v-model="mode" type="radio" value="selected" data-field="batch-selected" />{{ t('nonprofitMembership.batchSelected', {count: effectiveMemberIds.length}) }}</label>
         <label class="flex items-center gap-2"><input v-model="mode" type="radio" value="active" data-field="batch-active" />{{ t('nonprofitMembership.batchActive') }}</label>
       </fieldset>
-      <p v-if="mode === 'selected' && !selectedMemberIds.length" :class="warningBox">{{ t('nonprofitMembership.batchSelectionRequired') }}</p>
-      <MembershipIssueFlow :key="supplier" :supplier="supplier" :can-manage="canManage" :periods="periods" :history="[]"
-        :member="{id: 0, member_number: '', label: ''}" batch-mode :batch-busy="busy" @batch-request="prepareRequest" @close="emit('close')" />
-    </template>
-    <template v-else>
+      <p v-if="mode === 'selected' && !effectiveMemberIds.length" :class="warningBox">{{ t('nonprofitMembership.batchSelectionRequired') }}</p>
+      <p v-if="mode === 'selected' && draftMemberIds" class="text-sm text-neutral-500">{{ t('nonprofitMembership.batchReusedSelection') }}</p>
+      <MembershipIssueFlow :key="`${supplier}-${draftKey}`" :supplier="supplier" :can-manage="canManage" :periods="periods" :history="[]" :initial-request="draftTemplate"
+        :member="{id: 0, member_number: '', label: ''}" batch-mode :batch-busy="busy || !!detail" @batch-request="prepareRequest" @close="emit('close')" />
+    </div>
+    <template v-if="detail">
       <p class="font-medium">{{ detail.batch.template.title_key }} · {{ formatDateRange(detail.batch.template.period_from, detail.batch.template.period_to) }}</p>
       <p class="text-sm">{{ t(`nonprofitMembership.batchPhase_${detail.batch.phase}`) }}</p>
       <dl class="grid gap-3 sm:grid-cols-3" data-section="batch-summary">
         <div v-for="status in ['total', 'pending', 'ready', 'created', 'existing', 'rejected'] as const" :key="status"><dt class="text-sm text-neutral-500">{{ t(`nonprofitMembership.batchStatus_${status}`) }}</dt><dd class="tabular-nums">{{ detail.summary[status] }}</dd></div>
         <div><dt class="text-sm text-neutral-500">{{ t('nonprofitMembership.batchPlannedAmount') }}</dt><dd class="tabular-nums">{{ formatMoneyMinor(Number(detail.summary.planned_cents)) }}</dd></div>
       </dl>
+      <p v-if="detail.summary.deferral_date && Number(detail.summary.deferred_cents) > 0" class="text-sm text-warning-700" data-section="batch-deferral">{{ t('nonprofitMembership.deferralProposal', {amount: formatMoneyMinor(Number(detail.summary.deferred_cents)), date: formatDate(detail.summary.deferral_date)}) }}</p>
       <dl class="grid gap-3 text-sm sm:grid-cols-3">
         <div><dt class="text-neutral-500">{{ t('nonprofitMembership.amount') }}</dt><dd>{{ formatMoney(detail.batch.template.amount) }}</dd></div>
         <div><dt class="text-neutral-500">{{ t('nonprofitMembership.accountingDate') }}</dt><dd>{{ formatDate(detail.batch.template.accounting_date) }}</dd></div>

@@ -158,6 +158,29 @@ final class MembershipNativeTest extends TestCase
         }
     }
 
+    public function testBatchDeferralUsesSinglePreviewAmountsAndExcludesRejectedMembers(): void
+    {
+        $template = $this->batchTemplate();
+        $template['period_from'] = '2026-11-01'; $template['period_to'] = '2027-10-31';
+        $template['accounting_date'] = '2026-11-01'; $template['due_date'] = '2026-11-30';
+        $ids = [];
+        for ($i = 1; $i <= 3; $i++) $ids[] = $this->member('SYN-DEFERRAL-' . $i, 'deferral-' . $i)['id'];
+        $this->members->appendRevision($this->supplier, $ids[2], ['status' => 'suspended', 'effective_from' => '2026-07-01',
+            'expected_revision' => 1, 'idempotency_key' => 'synthetic-deferral-suspension', 'legal_basis' => $this->basis('Synthetic suspension')], $this->actor);
+        $single = $this->charges->previewIssue($this->supplier, ['member_id' => $ids[0]] + $template);
+        $expected = (string) ((int) round((float) $single['deferral']['deferred_amount'] * 100) * 2);
+        $batches = new \MyInvoice\Service\Nonprofit\Membership\MembershipBatchService($this->db, $this->charges);
+        $batch = $batches->create($this->supplier, ['template' => $template, 'selection_mode' => 'selected', 'member_ids' => $ids, 'idempotency_key' => 'synthetic-deferral-batch'], $this->actor);
+        $preview = $batches->prepare($this->supplier, $batch['batch']['id']);
+        self::assertSame(2, $preview['summary']['ready']);
+        self::assertSame(1, $preview['summary']['rejected']);
+        self::assertSame($expected, $preview['summary']['deferred_cents']);
+        self::assertSame($single['deferral']['balance_sheet_date'], $preview['summary']['deferral_date']);
+        $done = $batches->confirm($this->supplier, $batch['batch']['id'], $preview['batch']['approval_token'], $this->actor);
+        self::assertSame($expected, $done['summary']['deferred_cents']);
+        self::assertSame($preview['summary']['deferral_date'], $done['summary']['deferral_date']);
+    }
+
     public function testBatchReportsCreatedExistingAndRejectedWithoutDuplicatePosting(): void
     {
         $template = $this->batchTemplate();

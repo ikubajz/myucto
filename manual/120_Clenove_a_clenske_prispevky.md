@@ -50,11 +50,13 @@ Použijte sazbu a zkontrolujte společné údaje ve stejném formuláři jako u 
 
 Souhrn zahrnuje celou dávku, ne jen zobrazenou stránku: počet členů, počet připravených předpisů, částku a rozpad zápisu na pohledávkový a výnosový účet. U členů uvidíte **Připraveno k zápisu**, **Předpis již existuje** nebo **Vynecháno s důvodem**. Existující předpis stejného označení a přesného období se nepřepisuje ani nevytváří podruhé; jeho částka se může od vybrané sazby lišit. Jiný překryv období se odmítne s důvodem. Výsledky členů lze stránkovat po 50.
 
+Při přesahu rozvahového dne náhled ukáže souhrnnou částku časového rozlišení připravených předpisů a vysvětlí odložení na účet 384 v kroku uzávěrky. Odmítnutí členové a dříve existující předpisy se do této částky nezapočítávají.
+
 Zkontrolujte společné období, data, částku na člena, účty, dimenze a podklady. Potvrzovací souhlas se vztahuje na všechny připravené členy dávky, nejen na viditelnou stránku. Až potom zvolte **Potvrdit dávku a zapsat předpisy**. Každý člen se účtuje samostatnou operací se stejnými kontrolami jako ruční předpis. Změna podkladů nebo uzavření období po náhledu může konkrétní předpis odmítnout; ostatní výsledky zůstávají uložené.
 
 Přípravu nebo zápis můžete pozastavit po současné části. Přes **Uložené dávky a pokračování** se lze vrátit i po obnovení stránky nebo přerušení spojení. Při pokračování se dokončí nezpracovaní členové a předchozí finanční zápisy se nezdvojí, ani když se předchozí odpověď ztratila. Po hromadném zápisu se obnoví otevřený detail člena; případné rozpracované potvrzení jednotlivého předpisu se nejdřív nechá bezpečně dokončit.
 
-Pro změnu společných údajů nebo nové zpracování členů po opravě odmítnutých podkladů použijte **Nová dávka**. Tato výslovná akce vytvoří nový požadavek; pouhé opakování neúspěšného spojení pokračuje v původním. Stav členství se dávkou nemění. Rozpracované dávky se do anonymizované kopie nepřenášejí; účetní operace se v ní zachovávají a anonymizují samostatně.
+Pro změnu společných údajů nebo nové zpracování členů po opravě odmítnutých podkladů použijte **Nová dávka**. Formulář převezme uložené společné údaje včetně ručních úprav a původně zaškrtnuté členy, také po otevření dávky z historie. U volby všech aktivních se jejich výběr znovu vyhodnotí k novému účetnímu datu. Pro jiný zaškrtnutý výběr dávku zavřete a vyberte členy v seznamu. Tato výslovná akce vytvoří nový požadavek a nový náhled; pouhé opakování neúspěšného spojení pokračuje v původním. Stav členství se dávkou nemění. Rozpracované dávky se do anonymizované kopie nepřenášejí; účetní operace se v ní zachovávají a anonymizují samostatně.
 
 ## 120.3 Úhrady a kontrola zůstatku
 

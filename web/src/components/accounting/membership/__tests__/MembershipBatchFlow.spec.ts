@@ -15,8 +15,8 @@ const request: MembershipIssueRequest = {member_id:0,rate_id:3,title_key:'synthe
 const {member_id: _id, ...template} = request
 const state = (phase: MembershipBatchDetail['batch']['phase']): MembershipBatchDetail => ({
   batch:{id:7,supplier_id:5,phase,template,approval_token:phase === 'preparing' ? null : 'a'.repeat(64),member_count:2,selection_mode:'selected'},
-  summary:{total:2,pending:phase === 'preparing' ? 2 : 0,ready:phase === 'ready' ? 2 : phase === 'posting' ? 1 : 0,created:phase === 'finished' ? 2 : phase === 'posting' ? 1 : 0,existing:0,rejected:0,planned_cents:'100000',created_cents:phase === 'finished' ? '100000' : '0'},
-  items:[{member_id:9,member_number:'SYN-9',company_name:'Synthetic member',status:phase === 'finished' ? 'created' : 'ready',amount_cents:50000,operation_id:null,error_code:null,error_message:null}],
+  summary:{total:2,pending:phase === 'preparing' ? 2 : 0,ready:phase === 'ready' ? 2 : phase === 'posting' ? 1 : 0,created:phase === 'finished' ? 2 : phase === 'posting' ? 1 : 0,existing:0,rejected:0,planned_cents:'100000',created_cents:phase === 'finished' ? '100000' : '0',deferred_cents:'0',deferral_date:null},
+  items:[9,10].map(id=>({member_id:id,member_number:`SYN-${id}`,company_name:'Synthetic member',status:phase === 'finished' ? 'created' : 'ready',amount_cents:50000,operation_id:null,error_code:null,error_message:null})),
   next_after_member_id:null,accounts:[{account:'315',side:'debit',amount_cents:'100000'},{account:'684',side:'credit',amount_cents:'100000'}],
 })
 const dimensions = {types:[{id:1,supplier_id:5,system_key:'activity'},{id:2,supplier_id:5,system_key:'activity_kind'},{id:3,supplier_id:5,system_key:'tax_regime'}],values:[{id:11,supplier_id:5,type_id:1,name:'Synthetic main',semantic_key:'main'},{id:22,supplier_id:5,type_id:2,name:'Synthetic membership',code:'SYNTHETIC'},{id:33,supplier_id:5,type_id:3,name:'Synthetic tax',semantic_key:'subject'}]}
@@ -31,6 +31,50 @@ beforeEach(() => {
   api.batch.mockResolvedValue(state('ready'))
 })
 describe('hromadný předpis', () => {
+  it('copies a selected saved batch from history across pages without issuing anything', async () => {
+    const source={...state('finished'),batch:{...state('finished').batch,member_count:3}}
+    api.batches.mockResolvedValue({items:[{id:7,phase:'finished',title_key:'synthetic',period_from:'2026-01-01',period_to:'2026-12-31',created_at:'2026-01-01 12:00:00',member_count:3}],next_before_id:null})
+    api.batch.mockResolvedValueOnce(source).mockResolvedValueOnce({...source,next_after_member_id:10})
+      .mockResolvedValueOnce({...source,items:[{...source.items[0]!,member_id:11}],next_after_member_id:null})
+    const w=mounted({selectedMemberIds:[]});await flushPromises()
+    await w.get('[data-action="batch-open"]').trigger('click');await flushPromises()
+    await w.get('[data-action="batch-new"]').trigger('click');await flushPromises()
+    expect(api.batch).toHaveBeenNthCalledWith(3,5,7,10)
+    expect(w.findComponent(Issue).props('initialRequest')).toEqual(template)
+    expect(api.createBatch).not.toHaveBeenCalled()
+    w.findComponent(Issue).vm.$emit('batchRequest',request);await flushPromises()
+    expect(api.createBatch).toHaveBeenCalledWith(5,expect.objectContaining({member_ids:[9,10,11]}))
+    expect(api.confirmBatch).not.toHaveBeenCalled()
+    w.unmount()
+  })
+  it('keeps the saved batch visible when copying its selected members fails', async () => {
+    const w=mounted();await flushPromises()
+    w.findComponent(Issue).vm.$emit('batchRequest',request);await flushPromises()
+    api.batch.mockRejectedValueOnce(new Error('Synthetic copy failure'))
+    await w.get('[data-action="batch-new"]').trigger('click');await flushPromises()
+    expect(w.find('[data-section="batch-summary"]').exists()).toBe(true)
+    expect(w.get('[data-section="batch-error"]').text()).toContain(cs.nonprofitMembership.error)
+    expect(api.createBatch).toHaveBeenCalledTimes(1)
+    w.unmount()
+  })
+  it('restores the saved template and selected members for correction after the list selection clears', async () => {
+    const w=mounted();await flushPromises()
+    w.findComponent(Issue).vm.$emit('batchRequest',request);await flushPromises()
+    await w.setProps({selectedMemberIds:[]});await flushPromises()
+    await w.get('[data-action="batch-new"]').trigger('click');await flushPromises()
+    expect(w.findComponent(Issue).props('initialRequest')).toEqual(template)
+    w.findComponent(Issue).vm.$emit('batchRequest',{...request,due_date:'2026-02-01'});await flushPromises()
+    expect(api.createBatch.mock.calls[1]?.[1]).toMatchObject({member_ids:[9,10],template:{due_date:'2026-02-01'}})
+    w.unmount()
+  })
+  it('shows the server-calculated aggregate deferral before batch approval', async () => {
+    api.prepareBatch.mockResolvedValue({...state('ready'),summary:{...state('ready').summary,deferred_cents:'50000',deferral_date:'2026-12-31'}})
+    const w=mounted();await flushPromises()
+    w.findComponent(Issue).vm.$emit('batchRequest',request);await flushPromises()
+    expect(w.get('[data-section="batch-deferral"]').text()).toContain('384')
+    expect(api.confirmBatch).not.toHaveBeenCalled()
+    w.unmount()
+  })
   it('starts a genuinely new batch with the same values only after the explicit new-batch action', async () => {
     const w=mounted();await flushPromises()
     w.findComponent(Issue).vm.$emit('batchRequest',request);await flushPromises()

@@ -117,7 +117,7 @@ export type MembershipBatchTemplate = Omit<MembershipIssueRequest, 'member_id'>
 export type MembershipBatchPhase = 'preparing' | 'ready' | 'posting' | 'finished'
 export type MembershipBatchStatus = 'pending' | 'ready' | 'created' | 'existing' | 'rejected'
 export interface MembershipBatchCreate { template: MembershipBatchTemplate; selection_mode: 'active' | 'selected'; member_ids: number[]; idempotency_key: string }
-export interface MembershipBatchSummary { total: number; pending: number; ready: number; created: number; existing: number; rejected: number; planned_cents: string; created_cents: string }
+export interface MembershipBatchSummary { total: number; pending: number; ready: number; created: number; existing: number; rejected: number; planned_cents: string; created_cents: string; deferred_cents: string; deferral_date: string | null }
 export interface MembershipBatchItem { member_id: number; member_number: string; company_name: string; status: MembershipBatchStatus; amount_cents: number; operation_id: number | null; error_code: string | null; error_message: string | null }
 export interface MembershipBatchDetail {
   batch: { id: number; supplier_id: number; phase: MembershipBatchPhase; template: MembershipBatchTemplate; approval_token: string | null; member_count: number; selection_mode: 'active' | 'selected' }

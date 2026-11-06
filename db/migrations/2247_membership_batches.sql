@@ -36,3 +36,8 @@ CREATE TABLE IF NOT EXISTS nonprofit_membership_batch_members (
  FOREIGN KEY (supplier_id,member_id) REFERENCES nonprofit_members(supplier_id,id) ON DELETE RESTRICT,
  FOREIGN KEY (supplier_id,operation_id) REFERENCES nonprofit_membership_charge_operations(supplier_id,id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Doplnění je opakovatelné i nad rozpracovanou vývojovou dávkou.
+ALTER TABLE nonprofit_membership_batch_members
+ ADD COLUMN IF NOT EXISTS deferred_cents BIGINT NOT NULL DEFAULT 0,
+ ADD COLUMN IF NOT EXISTS deferral_date DATE NULL;

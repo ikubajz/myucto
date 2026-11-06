@@ -9028,6 +9028,8 @@
             "columns": {
                 "amount_cents": "bigint(20) NOT NULL",
                 "batch_id": "bigint(20) unsigned NOT NULL",
+                "deferral_date": "date NULL DEFAULT NULL",
+                "deferred_cents": "bigint(20) NOT NULL DEFAULT 0",
                 "error_code": "varchar(100) NULL DEFAULT NULL",
                 "error_message": "varchar(2000) NULL DEFAULT NULL",
                 "expected_case_version": "int(10) unsigned NULL DEFAULT NULL",

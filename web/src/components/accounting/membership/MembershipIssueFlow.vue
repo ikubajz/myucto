@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import ActionBar, { type ActionItem } from '@/components/ui/ActionBar.vue'
@@ -26,12 +26,13 @@ const props = defineProps<{
   supplier: number; canManage: boolean
   member: { id: number; member_number: string; label: string }
   history: MemberRevision[]; periods: AccountingPeriod[]
-  batchMode?: boolean; batchBusy?: boolean
+  batchMode?: boolean; batchBusy?: boolean; initialRequest?: Omit<MembershipIssueRequest, 'member_id'>
 }>()
 const emit = defineEmits<{ done: []; close: []; lock: [locked: boolean]; batchRequest: [request: MembershipIssueRequest] }>()
 const { t, te } = useI18n()
 
 const inputForm = ref<HTMLFormElement | null>(null)
+const initializing = ref(!!props.batchMode && !!props.initialRequest)
 
 const form = reactive({
   periodId: 0, accountingDate: '', dueDate: '', periodFrom: '', periodTo: '', titleKey: '', amount: '',
@@ -40,7 +41,7 @@ const form = reactive({
   activityValueId: null as number | null, activityKindValueId: null as number | null, taxRegimeValueId: null as number | null,
 })
 const accounts = ref<ChartAccount[]>([])
-const appliedRate = ref<MembershipRate | null>(null)
+const appliedRate = ref<Pick<MembershipRate, 'id' | 'name'> | null>(null)
 function applyRate(rate: MembershipRate | null) {
   if (inputsLocked.value) return
   appliedRate.value = rate
@@ -73,7 +74,7 @@ const commit = useGuardedCommit<MembershipConfirmBody, MembershipPreview>({
   onDone: () => emit('done'),
 })
 
-const inputsLocked = computed(() => !!props.batchBusy || commit.locked.value)
+const inputsLocked = computed(() => initializing.value || !!props.batchBusy || commit.locked.value)
 
 const openPeriods = computed(() => props.periods.filter(p => p.status === 'open'))
 const chosenPeriod = computed(() => props.periods.find(p => p.id === form.periodId))
@@ -269,6 +270,7 @@ function clampDates() {
 watch(() => form.periodId, () => { clampDates(); void loadProfile() })
 watch([form, () => latestProfile.value?.id ?? 0, () => props.member.id], () => commit.touch(), { deep: true, flush: 'sync' })
 watch(() => props.supplier, () => {
+  initializing.value = false
   appliedRate.value = null
   commit.reset()
   accounts.value = []
@@ -280,11 +282,24 @@ watch(() => props.supplier, () => {
 })
 watch(inputsLocked, locked => emit('lock', locked))
 onBeforeUnmount(() => { alive = false })
-onMounted(() => {
+onMounted(async () => {
   const today = appIsoDate()
-  form.periodId = (openPeriods.value.find(p => p.starts_on <= today && p.ends_on >= today) ?? openPeriods.value[0])?.id ?? 0
+  const initial = props.batchMode ? props.initialRequest : undefined
+  const date = initial?.accounting_date ?? today
+  form.periodId = (openPeriods.value.find(p => p.starts_on <= date && p.ends_on >= date) ?? openPeriods.value[0])?.id ?? 0
   void loadAccounts()
-  void loadClassification()
+  const supplier = props.supplier
+  await loadClassification()
+  await nextTick()
+  if (!alive || supplier !== props.supplier) return
+  if (!initial) { initializing.value = false; return }
+  Object.assign(form, {accountingDate: initial.accounting_date, dueDate: initial.due_date, periodFrom: initial.period_from,
+    periodTo: initial.period_to, titleKey: initial.title_key, amount: initial.amount, receivable: initial.receivable_account,
+    revenue: initial.revenue_account, titleReference: initial.title_reference, evidence: initial.evidence, reason: initial.reason,
+    nonreciprocal: initial.nonreciprocal, activityValueId: initial.classification.activity_value_id,
+    activityKindValueId: initial.classification.activity_kind_value_id, taxRegimeValueId: initial.classification.tax_regime_value_id})
+  if (initial.rate_id) appliedRate.value = {id: initial.rate_id, name: t('nonprofitMembership.rateStoredBatch')}
+  initializing.value = false
 })
 
 const frozenRequest = computed(() => {
@@ -343,7 +358,7 @@ const actions = computed<ActionItem[]>(() => [
 
 <template>
   <section class="space-y-4 rounded-lg border bg-surface p-4" data-section="issue-flow">
-    <MembershipRates :key="supplier" :supplier="supplier" :can-manage="canManage" selectable :disabled="inputsLocked" @selected="applyRate" />
+    <MembershipRates :key="supplier" :supplier="supplier" :can-manage="canManage" selectable :allow-manual="!batchMode" :disabled="inputsLocked" @selected="applyRate" />
     <p v-if="appliedRate" class="text-sm text-neutral-500" data-section="applied-rate">{{ t('nonprofitMembership.rateApplied', { name: appliedRate.name }) }}</p>
     <h3 v-if="!batchMode" class="break-words font-semibold">{{ t('nonprofitMembership.issueTitle') }} · {{ member.member_number }} · {{ member.label }}</h3>
     <p class="text-sm text-neutral-500">{{ t('nonprofitMembership.issueHelp') }}</p>

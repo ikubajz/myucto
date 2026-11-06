@@ -137,6 +137,21 @@ beforeEach(() => {
 })
 
 describe('Membership issue flow', () => {
+  it('restores all saved batch overrides after options load and requires a new preview', async () => {
+    const {member_id: _member, ...initialRequest} = {...expectedRequest, rate_id: 42, nonreciprocal: true as const}
+    const w = mounted({batchMode: true, initialRequest})
+    expect(w.get('fieldset').attributes('disabled')).toBeDefined()
+    await flushPromises()
+    expect((w.get('[data-field="due-date"]').element as HTMLInputElement).value).toBe(initialRequest.due_date)
+    expect((w.get('[data-field="amount"]').element as HTMLInputElement).value).toBe(initialRequest.amount)
+    expect((w.get('[data-field="tax-regime"]').element as HTMLSelectElement).value).toBe('1202')
+    expect(w.findComponent(MembershipRates).props('allowManual')).toBe(false)
+    expect(w.emitted('batchRequest')).toBeUndefined()
+    await w.get('[data-action="issue-preview"]').trigger('click'); await flushPromises()
+    expect(w.emitted('batchRequest')?.[0]?.[0]).toEqual({...expectedRequest, rate_id: 42})
+    expect(api.confirm).not.toHaveBeenCalled()
+    w.unmount()
+  })
   it('uses the same form for a batch template without calling the single-member preview', async () => {
     const w = mounted({batchMode: true})
     await fill(w)

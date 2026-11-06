@@ -9,6 +9,7 @@ use MyInvoice\Infrastructure\Database\TransactionFailure;
 use MyInvoice\Repository\Nonprofit\Membership\MembershipBatchRepository;
 use MyInvoice\Service\Accounting\Dimension\DimensionPeriodGuard;
 use MyInvoice\Service\Accounting\PostingException;
+use MyInvoice\Service\Accounting\JournalLineAmount;
 use MyInvoice\Service\Tax\Nonprofit\NonprofitTaxRules;
 
 final class MembershipBatchService
@@ -84,6 +85,8 @@ final class MembershipBatchService
                     'amount_cents' => $existing ? (int) $existing['head_amount_cents'] : ($preview['request']['amount_cents'] ?? (int) $work[0]['amount_cents']),
                     'preview_hash' => $preview['preview_hash'] ?? null, 'expected_case_version' => $preview['expected_case_version'] ?? null,
                     'operation_id' => $existing['head_operation_id'] ?? null,
+                    'deferred_cents' => isset($preview['deferral']) ? JournalLineAmount::cents($preview['deferral']['deferred_amount']) : 0,
+                    'deferral_date' => $preview['deferral']['balance_sheet_date'] ?? null,
                     'error_code' => $error?->errorCode, 'error_message' => $error === null ? null : mb_substr($error->getMessage(), 0, 2000)];
             }
             $this->batches->prepared($supplier, $id, $rows);
