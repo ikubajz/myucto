@@ -772,6 +772,8 @@ final class RoutePermissionMap
         ['GET', '#^/api/accounting/(?:nonprofit-membership/(?:rates(?:/[0-9]+)?|members(?:/[0-9]+)?|claims/[0-9]+)|periods/[0-9]+/nonprofit-membership/reconciliation)$#', 'accounting', AccessLevel::READ],
         ['POST', '#^/api/accounting/nonprofit-membership/(?:rates|members(?:/[0-9]+/revisions)?|charges/(?:preview|confirm))$#', 'accounting.journal.post', AccessLevel::WRITE],
         ['PUT', '#^/api/accounting/nonprofit-membership/rates/[0-9]+$#', 'accounting.journal.post', AccessLevel::WRITE],
+        ['GET', '#^/api/accounting/nonprofit-membership/batches(/[0-9]+)?$#', 'accounting', AccessLevel::READ],
+        ['POST', '#^/api/accounting/nonprofit-membership/batches(/[0-9]+/(prepare|confirm))?$#', 'accounting.journal.post', AccessLevel::WRITE],
         ['GET', '#^/api/accounting/nonprofit-tax-savings$#', 'accounting', AccessLevel::READ],
         ['POST', '#^/api/accounting/nonprofit-tax-savings/sources/[0-9]+/(preview|events/[0-9]+/reverse-preview)$#', 'accounting', AccessLevel::READ],
         ['POST', '#^/api/accounting/nonprofit-tax-savings/sources/[0-9]+/(confirm|events/[0-9]+/reverse-confirm)$#', 'accounting.periods.close', AccessLevel::WRITE],

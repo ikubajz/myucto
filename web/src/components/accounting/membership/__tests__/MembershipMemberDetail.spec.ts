@@ -64,6 +64,24 @@ beforeEach(() => {
 })
 
 describe('Membership member detail', () => {
+  it('defers an external refresh while a single-charge confirmation is locked', async () => {
+    const w=mounted({refreshVersion:0});await flushPromises()
+    await w.get('[data-action="new-charge"]').trigger('click');await flushPromises()
+    w.findComponent(IssueFlow).vm.$emit('lock',true);await flushPromises()
+    await w.setProps({refreshVersion:1});await flushPromises()
+    expect(api.member).toHaveBeenCalledTimes(1)
+    expect(w.findComponent(IssueFlow).exists()).toBe(true)
+    w.findComponent(IssueFlow).vm.$emit('lock',false);await flushPromises()
+    expect(api.member).toHaveBeenCalledTimes(2)
+    w.unmount()
+  })
+  it('refreshes externally changed claims without closing the detail', async () => {
+    const w=mounted({refreshVersion:0});await flushPromises()
+    expect(api.member).toHaveBeenCalledTimes(1)
+    await w.setProps({refreshVersion:1});await flushPromises()
+    expect(api.member).toHaveBeenCalledTimes(2)
+    w.unmount()
+  })
   it.each(['cs', 'en'])('renders translated %s texts', async locale => {
     const w = mounted({}, locale)
     await flushPromises()

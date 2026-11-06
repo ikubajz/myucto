@@ -1147,7 +1147,8 @@
         "2243_work_report_billing.sql",
         "2244_payroll_import_profile_pamica_sample.sql",
         "2245_session_device_class.sql",
-        "2246_membership_rates.sql"
+        "2246_membership_rates.sql",
+        "2247_membership_batches.sql"
     ],
     "tables": {
         "abra_flexi_connections": {
@@ -9019,6 +9020,69 @@
                 "nonprofit_members_ibfk_3": "(created_by) -> users (id) ON UPDATE RESTRICT ON DELETE RESTRICT"
             },
             "checks": []
+        },
+        "nonprofit_membership_batch_members": {
+            "type": "BASE TABLE",
+            "engine": "InnoDB",
+            "collation": "utf8mb4_unicode_ci",
+            "columns": {
+                "amount_cents": "bigint(20) NOT NULL",
+                "batch_id": "bigint(20) unsigned NOT NULL",
+                "error_code": "varchar(100) NULL DEFAULT NULL",
+                "error_message": "varchar(2000) NULL DEFAULT NULL",
+                "expected_case_version": "int(10) unsigned NULL DEFAULT NULL",
+                "member_id": "bigint(20) unsigned NOT NULL",
+                "operation_id": "bigint(20) unsigned NULL DEFAULT NULL",
+                "preview_hash": "char(64) NULL DEFAULT NULL COLLATE ascii_bin",
+                "status": "enum('pending','ready','created','existing','rejected') NOT NULL DEFAULT 'pending'",
+                "supplier_id": "int(10) unsigned NOT NULL"
+            },
+            "indexes": {
+                "PRIMARY": "UNIQUE BTREE (supplier_id, batch_id, member_id)",
+                "ix_nmbm_status": "BTREE (supplier_id, batch_id, status, member_id)",
+                "supplier_id": "BTREE (supplier_id, member_id)",
+                "supplier_id_2": "BTREE (supplier_id, operation_id)"
+            },
+            "foreign_keys": {
+                "nonprofit_membership_batch_members_ibfk_1": "(supplier_id, batch_id) -> nonprofit_membership_batches (supplier_id, id) ON UPDATE RESTRICT ON DELETE CASCADE",
+                "nonprofit_membership_batch_members_ibfk_2": "(supplier_id, member_id) -> nonprofit_members (supplier_id, id) ON UPDATE RESTRICT ON DELETE RESTRICT",
+                "nonprofit_membership_batch_members_ibfk_3": "(supplier_id, operation_id) -> nonprofit_membership_charge_operations (supplier_id, id) ON UPDATE RESTRICT ON DELETE RESTRICT"
+            },
+            "checks": []
+        },
+        "nonprofit_membership_batches": {
+            "type": "BASE TABLE",
+            "engine": "InnoDB",
+            "collation": "utf8mb4_unicode_ci",
+            "columns": {
+                "approval_token": "char(64) NULL DEFAULT NULL COLLATE ascii_bin",
+                "confirmed_by": "bigint(20) unsigned NULL DEFAULT NULL",
+                "created_at": "datetime(6) NOT NULL DEFAULT current_timestamp(6)",
+                "created_by": "bigint(20) unsigned NOT NULL",
+                "id": "bigint(20) unsigned NOT NULL AUTO_INCREMENT",
+                "idempotency_key": "varchar(80) NOT NULL COLLATE ascii_bin",
+                "member_count": "int(10) unsigned NOT NULL DEFAULT 0",
+                "phase": "enum('preparing','ready','posting','finished') NOT NULL DEFAULT 'preparing'",
+                "request_hash": "char(64) NOT NULL COLLATE ascii_bin",
+                "selection_mode": "enum('active','selected') NOT NULL",
+                "supplier_id": "int(10) unsigned NOT NULL",
+                "template_json": "longtext NOT NULL"
+            },
+            "indexes": {
+                "PRIMARY": "UNIQUE BTREE (id)",
+                "confirmed_by": "BTREE (confirmed_by)",
+                "created_by": "BTREE (created_by)",
+                "uq_nmb_key": "UNIQUE BTREE (supplier_id, idempotency_key)",
+                "uq_nmb_tenant": "UNIQUE BTREE (supplier_id, id)"
+            },
+            "foreign_keys": {
+                "nonprofit_membership_batches_ibfk_1": "(supplier_id) -> supplier (id) ON UPDATE RESTRICT ON DELETE RESTRICT",
+                "nonprofit_membership_batches_ibfk_2": "(created_by) -> users (id) ON UPDATE RESTRICT ON DELETE RESTRICT",
+                "nonprofit_membership_batches_ibfk_3": "(confirmed_by) -> users (id) ON UPDATE RESTRICT ON DELETE RESTRICT"
+            },
+            "checks": {
+                "template_json": "json_valid(`template_json`)"
+            }
         },
         "nonprofit_membership_charge_cases": {
             "type": "BASE TABLE",

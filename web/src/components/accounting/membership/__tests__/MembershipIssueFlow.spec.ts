@@ -137,6 +137,24 @@ beforeEach(() => {
 })
 
 describe('Membership issue flow', () => {
+  it('uses the same form for a batch template without calling the single-member preview', async () => {
+    const w = mounted({batchMode: true})
+    await fill(w)
+    expect(w.get('[data-action="issue-preview"]').attributes('disabled')).toBeDefined()
+    w.findComponent(MembershipRates).vm.$emit('selected', {id: 42, supplier_id: 5, name: 'Synthetic batch rate', amount: '500.00',
+      receivable_account: '311', revenue_account: '684', title_key: 'synthetic-batch', period_months: 6,
+      title_reference: 'Synthetic resolution', evidence: 'Synthetic evidence', is_active: true, row_version: 1,
+      classification: {activity_value_id: 1001, activity_kind_value_id: 1101, tax_regime_value_id: 1202}})
+    await flushPromises()
+    await w.get('[data-action="issue-preview"]').trigger('click'); await flushPromises()
+    expect(api.preview).not.toHaveBeenCalled()
+    expect(w.emitted('batchRequest')?.[0]?.[0]).toMatchObject({rate_id: 42, amount: '500.00', title_key: 'synthetic-batch'})
+    await w.setProps({batchBusy: true})
+    expect(w.get('[data-action="issue-preview"]').attributes('disabled')).toBeDefined()
+    expect(w.get('fieldset').attributes('disabled')).toBeDefined()
+    w.unmount()
+  })
+
   it('applies explicit rate defaults, permits overrides and keeps the rate reference only in the request', async () => {
     const w = mounted()
     await fill(w)

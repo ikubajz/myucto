@@ -30,6 +30,7 @@ final class MembershipAction
     private readonly MembershipMemberService $memberService;
     private readonly MembershipChargeService $chargeService;
     private readonly MembershipReconciliationService $reconciliation;
+    private readonly \MyInvoice\Service\Nonprofit\Membership\MembershipBatchService $batchService;
     private readonly TenantReferenceGuard $tenantRefs;
 
     public function __construct(private readonly Connection $db, PostingService $posting)
@@ -39,6 +40,7 @@ final class MembershipAction
         $charges = new MembershipChargeRepository($db);
         $this->memberService = new MembershipMemberService($db, $this->members);
         $this->chargeService = new MembershipChargeService($db, $this->members, $charges, $posting);
+        $this->batchService = new \MyInvoice\Service\Nonprofit\Membership\MembershipBatchService($db, $this->chargeService);
         $this->reconciliation = new MembershipReconciliationService(new MembershipBalanceRepository($db));
     }
 
@@ -61,6 +63,43 @@ final class MembershipAction
             $active = $this->queryInteger($query['active_only'] ?? 1, 'active_only', 0, 1);
             $items = (new \MyInvoice\Repository\Nonprofit\Membership\MembershipRateRepository($this->db))->page($supplier, $after, (bool) $active);
             return ['items' => $items, 'next_after_id' => count($items) === 100 ? $items[array_key_last($items)]['id'] : null];
+        });
+    }
+
+    public function batches(Request $request, Response $response): Response
+    {
+        return $this->handle($request, $response, false, function (int $supplier) use ($request): array {
+            $before = $this->queryInteger($request->getQueryParams()['before_id'] ?? PHP_INT_MAX, 'before_id', 1);
+            $items = (new \MyInvoice\Repository\Nonprofit\Membership\MembershipBatchRepository($this->db))->recent($supplier, $before);
+            return ['items' => $items, 'next_before_id' => count($items) === 20 ? $items[array_key_last($items)]['id'] : null];
+        });
+    }
+
+    public function batch(Request $request, Response $response, array $args): Response
+    {
+        return $this->handle($request, $response, false, fn (int $supplier): array => $this->batchService->detail($supplier, (int) $args['id'],
+            $this->queryInteger($request->getQueryParams()['after_member_id'] ?? 0, 'after_member_id', 0)));
+    }
+
+    public function createBatch(Request $request, Response $response): Response
+    {
+        return $this->handle($request, $response, true, function (int $supplier) use ($request): array {
+            $body = $this->body($request, ['template', 'selection_mode', 'member_ids', 'idempotency_key']);
+            return $this->batchService->create($supplier, $body, $this->actor($request));
+        }, 201);
+    }
+
+    public function prepareBatch(Request $request, Response $response, array $args): Response
+    {
+        return $this->handle($request, $response, true, fn (int $supplier): array => $this->batchService->prepare($supplier, (int) $args['id']));
+    }
+
+    public function confirmBatch(Request $request, Response $response, array $args): Response
+    {
+        return $this->handle($request, $response, true, function (int $supplier) use ($request, $args): array {
+            $body = $this->body($request, ['approval_token']);
+            if (!is_string($body['approval_token'])) throw new MembershipException('nonprofit_membership_batch_invalid', 'Potvrzení dávky nemá platný tvar.');
+            return $this->batchService->confirm($supplier, (int) $args['id'], $body['approval_token'], $this->actor($request));
         });
     }
 
