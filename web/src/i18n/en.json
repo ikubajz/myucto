@@ -39549,6 +39549,7 @@
     "batchAck": "I have reviewed the shared details, accounting classification, totals and member outcomes. I approve posting every prepared charge in this batch.",
     "rateRetryOptions": "Reload accounts and dimensions",
     "ratePartialList": "Search covers loaded rates only. Use the button to load more.",
+    "ratesEmptyRequired": "There are no rates yet. Create a rate before preparing a batch.",
     "rateStoredBatch": "Saved batch rate",
     "rateNoResults": "No results",
     "rateClear": "Clear selection",

@@ -39234,6 +39234,7 @@
     "batchAck": "Zkontroloval(a) jsem společné údaje, účetní členění, souhrn a výsledky pro členy. Souhlasím se zápisem všech připravených předpisů v této dávce.",
     "rateRetryOptions": "Znovu načíst účty a dimenze",
     "ratePartialList": "Hledáte jen v načtených sazbách. Další sazby načtete tlačítkem vedle.",
+    "ratesEmptyRequired": "Zatím tu není žádná sazba. Pro hromadný předpis nejdřív založte sazbu.",
     "rateStoredBatch": "Sazba uložené dávky",
     "rateNoResults": "Žádné výsledky",
     "rateClear": "Zrušit výběr",

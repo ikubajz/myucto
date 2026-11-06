@@ -64,8 +64,11 @@ describe('sazby členských příspěvků', () => {
     w.unmount()
   })
   it('hides manual entry when the parent requires a rate', async () => {
+    api.rates.mockResolvedValue({items: [], next_after_id: null})
     const w = mounted({allowManual: false}); await flushPromises()
     expect(w.find('[data-action="manual-rate"]').exists()).toBe(false)
+    expect(w.text()).toContain(cs.nonprofitMembership.ratesEmptyRequired)
+    expect(w.text()).not.toContain(cs.nonprofitMembership.ratesEmpty)
     w.unmount()
   })
   it.each(['create', 'update'])('keeps a successful %s response when its cached panel reactivates during saving', async path => {

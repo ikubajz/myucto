@@ -185,7 +185,7 @@ onBeforeUnmount(() => { alive = false; generation++; editorGeneration++; saveGen
       <button type="button" :class="btnOutline('neutral')" :disabled="loading || saving" data-action="more-rates" @click="load(true)"><svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path :d="ICONS.chevron" /></svg>{{ t('nonprofitMembership.rateMore') }}</button>
     </div>
     <label class="flex items-center gap-2 text-sm"><input v-model="includeInactive" type="checkbox" :disabled="saving" />{{ t('nonprofitMembership.rateShowInactive') }}</label>
-    <p v-if="!loading && !items.length" class="text-sm text-neutral-500">{{ t('nonprofitMembership.ratesEmpty') }}</p>
+    <p v-if="!loading && !items.length" class="text-sm text-neutral-500">{{ t(allowManual ? 'nonprofitMembership.ratesEmpty' : 'nonprofitMembership.ratesEmptyRequired') }}</p>
     <ActionBar :actions="actions" />
     <form v-if="editing" ref="editor" class="space-y-3 border-t pt-3" data-section="rate-editor" @submit.prevent="save">
       <p v-if="editorLoading" role="status" class="text-sm text-neutral-500">{{ t('common.loading') }}</p>

@@ -88,10 +88,10 @@ final class MembershipBatchRepository
         $q = $this->db->pdo()->prepare("UPDATE nonprofit_membership_batch_members i
             JOIN nonprofit_membership_batches b ON b.supplier_id=i.supplier_id AND b.id=i.batch_id
             JOIN JSON_TABLE(?, '$[*]' COLUMNS(
-              member_id BIGINT PATH '$.member_id', status VARCHAR(16) PATH '$.status', amount_cents BIGINT PATH '$.amount_cents',
-              preview_hash VARCHAR(64) PATH '$.preview_hash', expected_case_version INT PATH '$.expected_case_version',
+              member_id BIGINT PATH '$.member_id', status VARCHAR(16) COLLATE utf8mb4_unicode_ci PATH '$.status', amount_cents BIGINT PATH '$.amount_cents',
+              preview_hash VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin PATH '$.preview_hash', expected_case_version INT PATH '$.expected_case_version',
               operation_id BIGINT PATH '$.operation_id', deferred_cents BIGINT PATH '$.deferred_cents', deferral_date DATE PATH '$.deferral_date',
-              error_code VARCHAR(100) PATH '$.error_code', error_message VARCHAR(2000) PATH '$.error_message'
+              error_code VARCHAR(100) COLLATE utf8mb4_unicode_ci PATH '$.error_code', error_message VARCHAR(2000) COLLATE utf8mb4_unicode_ci PATH '$.error_message'
             )) p ON p.member_id=i.member_id
             SET i.status=p.status,i.amount_cents=p.amount_cents,i.preview_hash=p.preview_hash,i.expected_case_version=p.expected_case_version,
                 i.operation_id=p.operation_id,i.deferred_cents=p.deferred_cents,i.deferral_date=p.deferral_date,i.error_code=p.error_code,i.error_message=p.error_message
